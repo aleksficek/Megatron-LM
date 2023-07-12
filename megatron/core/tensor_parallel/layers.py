@@ -538,16 +538,34 @@ class ColumnParallelLinear(torch.nn.Module):
             )
 
 
-    def forward(self, input_):
+    def forward(self,
+                input_: torch.Tensor,
+                weight: Optional[torch.Tensor] = None):
         """Forward of ColumnParallelLinear
 
         Args:
             input_: 3D tensor whose order of dimension is [sequence, batch, hidden]
 
+            weight (optional): weight tensor to use, compulsory when
+                skip_weight_param_allocation is True.
+
         Returns:
             - output
             - bias
+
         """
+        if weight is None:
+            if self.weight is None:
+                raise RuntimeError("weight was not supplied to ColumnParallelLinear forward pass "
+                                   "and skip_weight_param_allocation is True.")
+            weight = self.weight
+        else:
+            # Check the weight passed in is the correct shape
+            expected_shape = (self.output_size_per_partition, self.input_size)
+            if weight.shape != expected_shape:
+                raise RuntimeError(f"supplied weight's shape is {tuple(weight.shape)}, "
+                                   f"not {expected_shape} as expected")
+        
         bias = self.bias if not self.skip_bias_add else None
 
         if self.async_tensor_model_parallel_allreduce or \
@@ -558,7 +576,7 @@ class ColumnParallelLinear(torch.nn.Module):
         # Matrix multiply.
         output_parallel = linear_with_grad_accumulation_and_async_allreduce(
             input=input_parallel,
-            weight=self.weight,
+            weight=weight,
             bias=bias,
             gradient_accumulation_fusion=self.gradient_accumulation_fusion,
             async_grad_allreduce=self.async_tensor_model_parallel_allreduce,
