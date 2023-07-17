@@ -240,7 +240,14 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
         else:
             total_input = input
 
-        output = torch.matmul(total_input, weight.t())
+        if len(weight.shape) == 2:
+            output = torch.matmul(total_input, weight.t())
+        elif len(weight.shape) == 3:
+            total_input = total_input.transpose(0, 1)
+            output = torch.matmul(total_input, weight.transpose(1, 2))
+            output = output.transpose(0, 1)
+        else:
+            raise RuntimeError(f"Unable to perform matmul between tensors of shape {total_input.shape} and {weight.shape}") 
         if bias is not None:
             output = output + bias
         return output
@@ -561,7 +568,10 @@ class ColumnParallelLinear(torch.nn.Module):
             weight = self.weight
         else:
             # Check the weight passed in is the correct shape
-            expected_shape = (self.output_size_per_partition, self.input_size)
+            if len(weight.shape) == 2:
+                expected_shape = (self.output_size_per_partition, self.input_size)
+            elif len(weight.shape) == 3:
+                expected_shape = (input_.shape[1], self.output_size_per_partition, self.input_size)
             if weight.shape != expected_shape:
                 raise RuntimeError(f"supplied weight's shape is {tuple(weight.shape)}, "
                                    f"not {expected_shape} as expected")
@@ -590,6 +600,8 @@ class ColumnParallelLinear(torch.nn.Module):
             output = output_parallel
         output_bias = self.bias if self.skip_bias_add else None
         return output, output_bias
+    
+    
 
 
 class RowParallelLinear(torch.nn.Module):
