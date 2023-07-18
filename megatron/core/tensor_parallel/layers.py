@@ -706,11 +706,13 @@ class RowParallelLinear(torch.nn.Module):
 
 
 
-    def forward(self, input_):
+    def forward(self, input_, 
+                weight: Optional[torch.Tensor] = None):
         """Forward of RowParallelLinear
 
         Args:
             input_: 3D tensor whose order of dimension is [sequence, batch, hidden]
+            weight: 3D or 2D tensor of weights 
 
         Returns:
             - output
@@ -722,10 +724,25 @@ class RowParallelLinear(torch.nn.Module):
         else:
             assert not self.sequence_parallel_enabled
             input_parallel = scatter_to_tensor_model_parallel_region(input_)
+
+        if weight is None:
+            if self.weight is None:
+                raise RuntimeError("weight was not supplied to ColumnParallelLinear forward pass "
+                                   "and skip_weight_param_allocation is True.")
+            weight = self.weight
+        else:
+            # Check the weight passed in is the correct shape
+            if len(weight.shape) == 2:
+                expected_shape = (self.output_size_per_partition, self.input_size)
+            elif len(weight.shape) == 3:
+                expected_shape = (input_.shape[1], self.output_size_per_partition, self.input_size)
+            if weight.shape != expected_shape:
+                raise RuntimeError(f"supplied weight's shape is {tuple(weight.shape)}, "
+                                   f"not {expected_shape} as expected")
         # Matrix multiply.
         output_parallel = linear_with_grad_accumulation_and_async_allreduce(
             input=input_parallel,
-            weight=self.weight,
+            weight=weight,
             bias=None,
             gradient_accumulation_fusion=self.gradient_accumulation_fusion,
             async_grad_allreduce=False,
