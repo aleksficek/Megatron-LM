@@ -595,6 +595,7 @@ class ColumnParallelLinear(torch.nn.Module):
         if self.gather_output:
             # All-gather across the partitions.
             assert not self.sequence_parallel_enabled
+            output_parallel = output_parallel.contiguous()
             output = gather_from_tensor_model_parallel_region(output_parallel)
         else:
             output = output_parallel
