@@ -707,16 +707,37 @@ class RowParallelLinear(torch.nn.Module):
 
 
 
-    def forward(self, input_):
+    def forward(self,
+                input_: torch.Tensor,
+                weight: Optional[torch.Tensor] = None):
         """Forward of RowParallelLinear
 
         Args:
             input_: 3D tensor whose order of dimension is [sequence, batch, hidden]
+            weight (optional): weight tensor to use, compulsory when
+                skip_weight_param_allocation is True.
 
         Returns:
             - output
             - bias
         """
+
+        if weight is None:
+            if self.weight is None:
+                raise RuntimeError("weight was not supplied to RowParallelLinear forward pass "
+                                   "and skip_weight_param_allocation is True.")
+            weight = self.weight
+        else:
+            # Check the weight passed in is the correct shape
+            if len(weight.shape) == 2:
+                expected_shape = (self.output_size, self.input_size_per_partition)
+            elif len(weight.shape) == 3:
+                expected_shape = (input_.shape[1], self.output_size, self.input_size_per_partition)
+            if weight.shape != expected_shape:
+                raise RuntimeError(f"supplied weight's shape is {tuple(weight.shape)}, "
+                                   f"not {expected_shape} as expected")
+        
+
         # Set up backprop all-reduce.
         if self.input_is_parallel:
             input_parallel = input_
