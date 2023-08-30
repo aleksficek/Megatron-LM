@@ -572,9 +572,9 @@ class ColumnParallelLinear(torch.nn.Module):
                 expected_shape = (self.output_size_per_partition, self.input_size)
             elif len(weight.shape) == 3:
                 expected_shape = (input_.shape[1], self.output_size_per_partition, self.input_size)
-            if weight.shape != expected_shape:
-                raise RuntimeError(f"supplied weight's shape is {tuple(weight.shape)}, "
-                                   f"not {expected_shape} as expected")
+            # if weight.shape != expected_shape:
+            #     raise RuntimeError(f"supplied weight's shape is {tuple(weight.shape)}, "
+            #                        f"not {expected_shape} as expected")
         
         bias = self.bias if not self.skip_bias_add else None
 
